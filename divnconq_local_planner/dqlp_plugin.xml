@@ -1,0 +1,7 @@
+<library path="lib/libdivnconq_local_planner">
+	<class name ="divnconq_local_planner/DivnConqPlannerROS" type ="divnconq_local_planner::DivnConqPlannerROS" base_class_type= "nav_core::BaseLocalPlanner">
+		<description>
+			DivnConq Plugin for BaseLocalPlanner that allows you to follow the global path avoiding obstacles through the divide 				and conquer algorithm.
+		</description>
+	</class>
+</library>
