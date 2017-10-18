@@ -10,6 +10,14 @@
 // local planner specific classes which provide some macros
 #include <base_local_planner/goal_functions.h>
 
+// time
+#include <time.h>
+
+//files
+#include <fstream>
+#include <iostream>
+using namespace std;
+
 // msgs
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -127,6 +135,7 @@ namespace divnconq_local_planner{
       // Topics & Services
       ros::Subscriber amcl_sub; ///<@brief subscribes to the amcl topic
       ros::Subscriber laser_sub; ///<@brief subscribes to the laser topic
+      ros::Publisher path_pub; ///<@brief publishes to the bubble shape to visualize on rviz 
 
       // Data
       pos now; // present frame
@@ -137,6 +146,7 @@ namespace divnconq_local_planner{
       int count; // keeps track of the number for the next frame in the global plan
       std::vector<geometry_msgs::PoseStamped> plan; // contains the global plan
       geometry_msgs::Twist cmd; // contains the velocity
+      visualization_msgs::Marker points;
 
       double yawR;
       sensor_msgs::LaserScan laserData;
@@ -162,6 +172,14 @@ namespace divnconq_local_planner{
       int Srd; //angle of the gap in the closest region closes to the intermediate goal
 
       bool inside[180]; //indicates if an obstacle is inside the security zone
+
+     //measuring
+      double average;
+      int num;
+      ofstream file;
+      double stopTime, startTime;
+      bool firstTime, hasStarted;
+      double pathLength;
 
 
       // Flags
@@ -321,6 +339,8 @@ namespace divnconq_local_planner{
       */
 
       int findIntermGoal();
+
+      void pathVisualization();
 
 
 
