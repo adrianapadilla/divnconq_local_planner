@@ -34,6 +34,40 @@ namespace divnconq_local_planner{
 		ros::NodeHandle gn;
 		amcl_sub = gn.subscribe("amcl_pose", 100, &DivnConqPlannerROS::amclCallback, this);
 		laser_sub = gn.subscribe("laser", 100, &DivnConqPlannerROS::laserCallback, this);
+        	path_pub = gn.advertise<visualization_msgs::Marker>("visualization_marker", 10);
+
+		//initializing the visualization markers
+		points.header.frame_id = "/map";
+	 
+		points.header.stamp = ros::Time::now();
+	 
+		points.ns = "path_drawing";
+	 
+		points.action = visualization_msgs::Marker::ADD;
+	 
+		points.id = 0;
+	 
+		//points.pose.position.x = now.x;
+		//points.pose.position.y = now.y;
+		//points.pose.position.z = 0.5;
+	 
+		points.type = visualization_msgs::Marker::POINTS;
+	 
+		points.scale.x = 0.1;
+		points.scale.y = 0.1;
+	 
+		points.color.g = 1.0f;
+		points.color.a = 1.0;
+
+		average = 0;
+		num = 0;
+		firstTime = 1;
+		hasStarted = 0;
+                pathLength = 0;
+
+		//open file
+		file.open("/home/adriana/adrianaTFG/divnconq_cs/divnconq_cs_9.txt", ios::out);// | ios::trunc);
+
 
 		// set initialized flag
 		initialized_ = true;
@@ -103,6 +137,13 @@ namespace divnconq_local_planner{
 
 		if(length != 0){ 
 
+			if(firstTime){
+				startTime = ros::Time::now().toSec();
+				firstTime = 0;
+			}
+
+			double beginning = ros::Time::now().toSec();
+
 			setNowError();
 
 			if(!blockedPath() & flag){ 
@@ -119,7 +160,25 @@ namespace divnconq_local_planner{
 						}
 						setNext();
 					}else{
-	
+
+						stopTime = ros::Time::now().toSec();
+						
+						//time to reach goal
+						ROS_INFO("journey duration: %f", (stopTime-startTime));
+
+						//path length
+						ROS_INFO("path length: %f", pathLength);
+
+						//average executation time (for computational cost)
+						ROS_INFO("avrg exec time: %f", average/num);
+
+						if(file.is_open()){
+							ROS_INFO("I'm OPEN!");
+							//file.close();
+						}else{
+							ROS_INFO("I'm NOT open!");
+						}
+
 						setVelZ();
 						goal_reached_ = true;
 
@@ -148,13 +207,12 @@ namespace divnconq_local_planner{
 				if(flag2){
 		
 					intermGoal = count + 200;
-					if(intermGoal >= length) intermGoal = length-1;
+					if(intermGoal >= length) intermGoal = length-2;
 
 					flag2 = 0;
 				}
 
 				setIntermGoal();
-
 				if(goalVisible()){ 
 
 					ROS_INFO("goal is visible again!");
@@ -184,20 +242,64 @@ namespace divnconq_local_planner{
 					ROS_INFO("angle: %f", (yawR/D2R + 90 - now.az/D2R));
 					ROS_INFO("side = %d", side);
 					ROS_INFO("situation = %d", situation);
+					
+					if((intermGoal >= (length-2)) & (intermGoalD < 0.5)){
+						ROS_INFO("Goal Reached");
 
+						stopTime = ros::Time::now().toSec();
+					
+						//time to reach goal
+						ROS_INFO("journey duration: %f", (stopTime-startTime));
+
+						//path length
+						ROS_INFO("path length: %f", pathLength);
+
+						//average executation time (for computational cost)
+						ROS_INFO("avrg exec time: %f", average/num);
+
+						if(file.is_open()){
+							ROS_INFO("I'm OPEN!");
+							file.close();
+						}else{
+							ROS_INFO("I'm NOT open!");
+						}
+						goal_reached_ = true;
+						return true; //the robot shouldn't move until a new goal is given
+
+					}
 
 					//if the goal isn't reachable or there is no navigable path, theAlgorithm() = 11:
 					if(yawR == 11){
 						setVelZ();
 						if(intermGoalD < 0.5){
 							ROS_INFO("Goal Reached");
+
+							stopTime = ros::Time::now().toSec();
+						
+							//time to reach goal
+							ROS_INFO("journey duration: %f", (stopTime-startTime));
+
+							//path length
+							ROS_INFO("path length: %f", pathLength);
+
+							//average executation time (for computational cost)
+							ROS_INFO("avrg exec time: %f", average/num);
+
+							if(file.is_open()){
+								ROS_INFO("I'm OPEN!");
+								file.close();
+							}else{
+								ROS_INFO("I'm NOT open!");
+							}
 							goal_reached_ = true;
 							return true; //the robot shouldn't move until a new goal is given
 
 						}else{
 							ROS_INFO("Goal not reachable... :(");
-							goal_reached_ = true;
-							return true; //the robot shouldn't move until a new goal is given
+							/*goal_reached_ = true;
+							return true; //the robot shouldn't move until a new goal is given*/
+
+							yawR = now.az + 180*D2R;
 						}
 					}
 
@@ -221,6 +323,13 @@ namespace divnconq_local_planner{
 			
 			}
 
+			//max and min speeds:
+			if(cmd.linear.x>0.5)cmd.linear.x = 0.5;
+			if(cmd.angular.z>0.5)cmd.angular.z = 0.5;
+			if(cmd.linear.x<-0.5)cmd.linear.x = -0.5;
+			if(cmd.angular.z<-0.5)cmd.angular.z = -0.5;
+
+
 			ROS_INFO("Length: [%d]", length);
 			ROS_INFO("count = %d", count);
 
@@ -228,10 +337,15 @@ namespace divnconq_local_planner{
 			ROS_INFO("vel -> angular.z=%.4f", cmd.angular.z);
 
 
+			double ending = ros::Time::now().toSec();
+			average += (ending-beginning);
+			num++;
+
+
 		}
 
 		// set retrieved commands to reference variable
-		ROS_DEBUG("Retrieving velocity command: (%f, %f, %f)", cmd.linear.x, cmd.linear.y, cmd.angular.z);
+		file << cmd.linear.x << " "<< cmd.linear.y << " "<< cmd.angular.z << endl;
 		cmd_vel = cmd;  
 
 		return true;
@@ -257,10 +371,27 @@ namespace divnconq_local_planner{
 
 		ROS_INFO("Seq: [%d]", msg->header.seq);
 
+		pos before;
+		if(hasStarted){
+			before.x = now.x;
+			before.y = now.y;
+		}
+
 		now.x = msg->pose.pose.position.x;
 		now.y = msg->pose.pose.position.y;
 		now.az = getYaw(*msg); 
 		setNowError(); 
+
+		if(hasStarted){
+			pathLength += std::sqrt((now.x-before.x)*(now.x-before.x) + (now.y-before.y)*(now.y-before.y));
+			ROS_INFO("%f, %f, %f", stopTime, startTime, pathLength);
+		}
+
+		//ROS_INFO("%f - %f, %f - %f", now.x, before.x, now.y, before.y);
+
+		pathVisualization();
+		
+		hasStarted = 1;
 
 	}
 
@@ -272,7 +403,7 @@ namespace divnconq_local_planner{
 
 		for(int i = 0; i<180; i++){ 
 
-			if(laserData.ranges[i]>3) laserData.ranges[i] = 3;
+			if(laserData.ranges[i]>4) laserData.ranges[i] = 4;
 
 		}
  
@@ -316,7 +447,7 @@ namespace divnconq_local_planner{
 		if (fabs(nError.az) > 50*D2R){
 
 			ROS_INFO("normal angular speed");
-			cmd.angular.z=(nError.az)*0.3;
+			cmd.angular.z=(nError.az)*0.5;
 			cmd.linear.x= 0.0;
 
 		}else{
@@ -374,7 +505,7 @@ namespace divnconq_local_planner{
 	void DivnConqPlannerROS::setVelR()
 	{
 		ROS_INFO("R linear speed");
-		cmd.linear.x= 0.3;
+		cmd.linear.x= 0.2;
 		cmd.angular.z= 0.75*(nError.az);
 
 
@@ -387,15 +518,17 @@ namespace divnconq_local_planner{
 		// the angular speed has been adjusted with a P regulator, that depends on how close we are to pointing at our current goal
 		if (fabs(nError.az) > 50*D2R){
 
-			cmd.angular.z=(nError.az)*0.3;
+			cmd.angular.z=(nError.az)*0.5;
+			cmd.linear.x= 0.0; 
 
 		}else{
 
 			cmd.angular.z=(nError.az)*0.5;
+			cmd.linear.x= 0.1; 
 		}
 		
 		// linear speed is zero while the angle is too big
-		cmd.linear.x= 0.1; 
+		
 
 	}
 
@@ -414,7 +547,7 @@ namespace divnconq_local_planner{
 	bool DivnConqPlannerROS::blockedPath() //boundary & angle depend on speed
 	{
 
-		double speed = std::sqrt(cmd.linear.x*cmd.linear.x );
+		double speed = std::sqrt(cmd.linear.x*cmd.linear.x);
 		double boundary[180];
 
 		if(speed){
@@ -428,12 +561,13 @@ namespace divnconq_local_planner{
 
 			//sets a boundary in front of the robot for obstacle detection. Depends on speed of the robot.
 			for(int i = min; i<90; i++){
-				boundary[i] =(i/60)*6*speed; 
+				boundary[i] =(i/60)*5*speed; 
 			}
 			for(int i = 90; i<max; i++){
-				boundary[i] =((180-i)/60)*6*speed;
+				boundary[i] =((180-i)/60)*5*speed;
 			}
-
+			
+			ROS_INFO("boundary.90 = %f", boundary[90]);
 
 			// checks if obstacle in middle of path (inside boundary) in order to start the local path planner
 			for(int i = min; i<max; i++){
@@ -517,19 +651,24 @@ namespace divnconq_local_planner{
 	{
 		int nextPoint = 0;
 
-		for(int m = length-1; m > intermGoal; m--){  
+		int minimum;
+		if(count >= (length -1)) minimum = length-2;
+		else minimum = count;
+		//for(int m = length-1; m > intermGoal; m--){  
 				
+		for(int k = length-1; k > minimum; k--){ 
+
 				int allClear = 1;
 				double alpha;	
 				double dist;	
 				pos iError;
 
-				iError.x = plan[m].pose.position.x - now.x;
-				iError.y = plan[m].pose.position.y - now.y;
+				iError.x = plan[k].pose.position.x - now.x;
+				iError.y = plan[k].pose.position.y - now.y;
 
 				dist = std::sqrt(iError.x*iError.x +iError.y*iError.y);
 
-				if(dist>0.5){
+				if(dist>3){
 					allClear = 0;
 				}else{
 
@@ -538,6 +677,8 @@ namespace divnconq_local_planner{
 					alpha = alpha +90*D2R -now.az; // passing to robot's frame
 
 					alpha = alpha/D2R; //passing radians to degrees
+					if ( alpha > 180 ) { alpha -= 360; }
+					if ( alpha < -180 ) { alpha += 360; }
 
 
 					int min = alpha - 15;
@@ -548,13 +689,12 @@ namespace divnconq_local_planner{
 					for(int i = min; i < max; i++)
 					{
 
-						if(laserData.ranges[i] < 0.5) allClear = 0; 
+						if(laserData.ranges[i] < 2) allClear = 0; 
 
 					}
-
-					if (allClear){ nextPoint = m;}
-
 				}
+				
+				if (allClear){ nextPoint = k;}
 			
 		}
 
@@ -613,7 +753,7 @@ namespace divnconq_local_planner{
 
 		for(int i = 0; i<180; i++){
 
-			if(RND[i] >= ns) {inside[i] = 1; j= 1;}
+			if(laserData.ranges[i] <= (ds+R)) {inside[i] = 1; j= 1;}
 			else inside[i] = 0;
 
 		}
@@ -781,11 +921,11 @@ namespace divnconq_local_planner{
 		}else{ // if checkSafety() == 1 : there is an obstacle inside the security area: LOW SAFETY
 
 			for(int i = 0; i < Srd ; i++){
-				if(inside[i] == 1) Safety1 = 1;
+				if(laserData.ranges[i] <= (ds+R)) Safety1 = 1;
 			}
 
 			for(int i = Srd; i < 180 ; i++){
-				if(inside[i] == 1) Safety2 = 1;
+				if(laserData.ranges[i] <= (ds+R)) Safety2 = 1;
 			}
 
 			if(Safety1 & Safety2)  situation = 6; 
@@ -839,6 +979,8 @@ namespace divnconq_local_planner{
 
 			alpha = (1/D2R)*std::asin((R+ds)/distDisc);
 
+			if(distDisc<=(R+ds)) alpha = 20;
+
 			angle = thetaDisc + m*alpha;
 
 		}
@@ -858,7 +1000,7 @@ namespace divnconq_local_planner{
 			distObs = laserData.ranges[0];
 
 			for(int i = 0; i < 180; i++){
-				if(inside[i] & (laserData.ranges[i]<distObs)){		
+				if(laserData.ranges[i]<distObs){		
 					thetaObs = i;
 					distObs = laserData.ranges[i];
 				}
@@ -867,7 +1009,7 @@ namespace divnconq_local_planner{
 			if(thetaObs<intermGoalA) m = 1;
 			else m = -1;
 
-			beta = ((ds-distObs)/ds)*fabs((m*180 + thetaObs)- intermGoalA);
+			//beta = ((ds-distObs)/ds)*fabs((m*180 + thetaObs)- intermGoalA);
 			n = distObs/(ds+R);
 			angle = (intermGoalA*n + (m*180 + thetaObs)*(1-n));
 
@@ -994,6 +1136,47 @@ namespace divnconq_local_planner{
 		return 11;
 
 	}
+
+	void DivnConqPlannerROS::pathVisualization()
+	{
+		// Visualization in rviz
+	 
+		/*visualization_msgs::Marker points;
+	 
+		points.header.frame_id = "/map";
+	 
+		points.header.stamp = ros::Time::now();
+	 
+		points.ns = "path_drawing";
+	 
+		points.action = visualization_msgs::Marker::ADD;
+	 
+		points.id = 0;
+	 
+		//points.pose.position.x = now.x;
+		//points.pose.position.y = now.y;
+		//points.pose.position.z = 0.5;
+	 
+		points.type = visualization_msgs::Marker::POINTS;
+	 
+		points.scale.x = 0.1;
+		points.scale.y = 0.1;
+	 
+		points.color.g = 1.0f;
+		points.color.a = 1.0;*/
+	 
+	        geometry_msgs::Point p;
+ 
+	        p.x = now.x;
+	        p.y = now.y;
+	        p.z = 0.5;
+ 
+      	        points.points.push_back(p);
+   
+	     
+		path_pub.publish(points); 
+	 
+	 }
 	
 
 
